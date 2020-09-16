@@ -1,0 +1,1960 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Application Webserver Template.",
+  "Metadata": {
+      "AWS::CloudFormation::Interface": {
+          "ParameterGroups": [
+              {
+                  "Label": {
+                      "default": "Network Configuration"
+                  },
+                  "Parameters": [
+                      "WebServerSubnets",
+                      "WebServerSecurityGroup",
+                      "PublicSubnet1ID",
+                      "PublicSubnet2ID",
+                      "VPCID",
+                      "EFSSecurityGroup"
+                  ]
+              },
+              {
+                  "Label": {
+                      "default": "Database Configuration"
+                  },
+                  "Parameters": [
+                      "DBEndpointAddress",
+                      "DBMasterUsername",
+                      "DBMasterUserPassword",
+                      "ApplicationDbName",
+                      "DBPort",
+                      "ApplicationDbUsername",
+                      "ApplicationDbUserPassword"
+                  ]
+              },
+              {
+                  "Label": {
+                      "default": "Application Configuration"
+                  },
+                  "Parameters": [
+                      "PhpVersion",
+                      "ApplicationVersion",
+                      "Docroot",
+                      "ApplicationSiteAdminEmail",
+                      "ApplicationSiteDomain"
+                  ]
+              },
+              {
+                  "Label": {
+                      "default": "Application Webserver Configuration"
+                  },
+                  "Parameters": [
+                      "WebServerInstanceType",
+                      "AutoScalingNotificationEmail",
+                      "WebServerMinSize",
+                      "WebServerMaxSize",
+                      "WebServerDesiredCapacity",
+                      "KeyPair"
+                  ]
+              }
+          ],
+          "ParameterLabels": {}
+      }
+  },
+  "Parameters": {        
+      "AccountName": {
+          "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+          "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+          "Description": "The name of the account.",
+          "Type": "String"
+      },
+      "EnvironmentName": {
+          "AllowedPattern": "[a-z]*",
+          "ConstraintDescription": "must contain only lowercase alpha characters.",
+          "Description": "The environment name.",
+          "Type": "String"
+      },
+      "DBPort": {
+          "ConstraintDescription": "DB Port",
+          "Default": "3306",
+          "Description": "The port that the database receives requests ",
+          "Type": "String"
+      },
+      "Docroot": {
+          "ConstraintDescription": "Docroot",
+          "Default": "/",
+          "Description": "The child directory of your project that acts as the public facing web root ",
+          "Type": "String"
+      },
+      "AutoScalingNotificationEmail": {
+          "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+          "ConstraintDescription": "Must be a valid email address.",
+          "Description": "Email address to notify Auto Scaling operations",
+          "Type": "String"
+      },
+      "WebServerSubnets": {
+          "ConstraintDescription": "must be list of existing subnet Ids",
+          "Default": "",
+          "Description": "A list of subnet identifiers of Amazon VPCs where the WebServer Autoscaling would be launched.",
+          "Type": "List<AWS::EC2::Subnet::Id>"
+      },
+      "EFSSecurityGroup": {
+          "Description": "EFS Security Group",
+          "Type": "AWS::EC2::SecurityGroup::Id"
+      },
+      "WebServerInstanceType": {
+          "AllowedValues": [
+              "t2.small",
+              "t2.medium",
+              "t2.large",
+              "m4.large",
+              "m4.xlarge",
+              "m4.2xlarge",
+              "m4.4xlarge",
+              "m4.10xlarge",
+              "m3.medium",
+              "m3.large",
+              "m3.xlarge",
+              "m3.2xlarge",
+              "c4.large",
+              "c4.xlarge",
+              "c4.2xlarge",
+              "c4.4xlarge",
+              "c4.8xlarge",
+              "c3.large",
+              "c3.xlarge",
+              "c3.2xlarge",
+              "c3.4xlarge",
+              "c3.8xlarge",
+              "r3.large",
+              "r3.xlarge",
+              "r3.2xlarge",
+              "r3.4xlarge",
+              "r3.8xlarge",
+              "i2.xlarge",
+              "i2.2xlarge",
+              "i2.4xlarge",
+              "i2.8xlarge"
+          ],
+          "ConstraintDescription": "Choose an instance type.",
+          "Default": "t2.small",
+          "Description": "Web Server node instance type",
+          "Type": "String"
+      },
+      "WebServerSecurityGroup": {
+          "Description": "Web Server Security Group",
+          "Type": "AWS::EC2::SecurityGroup::Id"
+      },
+      "KeyPair": {
+          "ConstraintDescription": "Must be the name of an existing EC2 KeyPair.",
+          "Default": "id_rsa_aws",
+          "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+          "Type": "AWS::EC2::KeyPair::KeyName"
+      },
+      "DBEndpointAddress": {
+          "Description": "Aurora DB Endpoint",
+          "Type": "String"
+      },
+      "DBMasterUsername": {
+          "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+          "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+          "Default": "dbadmin",
+          "Description": "The database admin account username",
+          "MaxLength": "16",
+          "MinLength": "1",
+          "Type": "String"
+      },
+      "DBMasterUserPassword": {
+          "AllowedPattern": "(?=\\S)[^@/\"\\r\\n\\t\\f\\s]*",
+          "ConstraintDescription": "Min 8 chars.",
+          "Description": "The database admin account password",
+          "MaxLength": "41",
+          "MinLength": "8",
+          "NoEcho": "True",
+          "Type": "String"
+      },
+      "ApplicationDbUserPassword": {
+        "AllowedPattern": "(?=\\S)[^@/\"\\r\\n\\t\\f\\s]*",
+        "ConstraintDescription": "Min 8 alphanumeric. Cannot contain white space, @, /, \"",
+        "Description": "The database admin account password",
+        "MaxLength": "41",
+        "MinLength": "8",
+        "NoEcho": "True",
+        "Type": "String"
+      },
+      "ApplicationDbUsername": {
+          "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+          "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+          "Default": "dbadmin",
+          "Description": "The database admin account username",
+          "MaxLength": "16",
+          "MinLength": "1",
+          "Type": "String"
+      },
+      "ApplicationDbName": {
+          "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+          "Default": "applicationdb",
+          "Description": "Name of the Database to be created and used for Application",
+          "MaxLength": "64",
+          "MinLength": "2",
+          "Type": "String"
+      },
+      "PhpVersion": {
+          "AllowedValues": [
+              "php56",
+              "php70",
+              "php71",
+              "php72"
+          ],
+          "ConstraintDescription": "Choose a valid PHP version. Values can be php56, php70, php71 ",
+          "Default": "php71",
+          "Description": "PHP version to be installed. PHP-5.6=php56, PHP-7.0=php70, PHP-7.1=php71, PHP-7.2=php72",
+          "Type": "String"
+      },
+      "ApplicationVersion": {
+          "Description": "Application version to install",
+          "Type": "String",
+          "AllowedValues": [
+              "7",
+              "8"
+          ],
+          "ConstraintDescription": "Allowed values 7 or 8",
+          "Default": "7"
+      },
+      "ApplicationSiteAdminEmail": {
+          "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+          "ConstraintDescription": "Must be a valid email address.",
+          "Description": "Application Site Administrator Email",
+          "Type": "String"
+      },
+      "ApplicationSiteDomain": {
+          "Description": "Domain name of the site. e.g. example.com. Valid FQDN required when using SSL. Leave the default localhost.local for test environments.",
+          "AllowedPattern": "(?!-)[a-zA-Z0-9-.]*(?<!-)",
+          "ConstraintDescription": "Must be a valid fully-qualified domain name.",
+          "Type": "String",
+          "Default": "localhost.local"
+      },
+      "WebServerMinSize": {
+          "Default": "1",
+          "Description": "Minimum number of web server instances in Auto Scaling group",
+          "Type": "Number"
+      },
+      "WebServerMaxSize": {
+          "Default": "12",
+          "Description": "Maximum number of web server instances in Auto Scaling group",
+          "Type": "Number"
+      },
+      "WebServerDesiredCapacity": {
+          "Default": "2",
+          "Description": "Desired number of web server instances in Auto Scaling group",
+          "Type": "Number"
+      },
+      "VPCID": {
+          "Description": "Select the VPC to deploy Application",
+          "Type": "AWS::EC2::VPC::Id"
+      },
+      "PublicSubnet1ID": {
+          "Description": "Public Subnet ID 1 located in Availability Zone 1",
+          "Type": "AWS::EC2::Subnet::Id"
+      },
+      "PublicSubnet2ID": {
+          "Description": "Public Subnet ID 2 located in Availability Zone 2",
+          "Type": "AWS::EC2::Subnet::Id"
+      },
+      "SSLCertificateId": {
+          "Default": "",
+          "Description": "The ARN of the SSL certificate to use for the load balancer. [optional]",
+          "Type": "String"
+      }
+  },
+  "Mappings": {
+      "AWSAMIRegionMap": {
+          "AMI": {
+              "AMZNLINUXHVM": "amzn-ami-hvm-2018.03.0.20190611-x86_64-gp2"
+          },
+          "ap-northeast-1": {
+              "AMZNLINUXHVM": "ami-04b2d1589ab1d972c"
+          },
+          "ap-northeast-2": {
+              "AMZNLINUXHVM": "ami-0be3e6f84d3b968cd"
+          },
+          "ap-south-1": {
+              "AMZNLINUXHVM": "ami-0b99c7725b9484f9e"
+          },
+          "ap-southeast-1": {
+              "AMZNLINUXHVM": "ami-0fb6b6f9e81056553"
+          },
+          "ap-southeast-2": {
+              "AMZNLINUXHVM": "ami-075caa3491def750b"
+          },
+          "ca-central-1": {
+              "AMZNLINUXHVM": "ami-0a67d15f2858e33cb"
+          },
+          "eu-central-1": {
+              "AMZNLINUXHVM": "ami-026d3b3672c6e7b66"
+          },
+          "eu-west-1": {
+              "AMZNLINUXHVM": "ami-0862aabda3fb488b5"
+          },
+          "eu-west-2": {
+              "AMZNLINUXHVM": "ami-0bdfa1adc3878cd23"
+          },
+          "sa-east-1": {
+              "AMZNLINUXHVM": "ami-0bb96001cf2299257"
+          },
+          "us-east-1": {
+              "AMZNLINUXHVM": "ami-035b3c7efe6d061d5"
+          },
+          "us-east-2": {
+              "AMZNLINUXHVM": "ami-02f706d959cedf892"
+          },
+          "us-west-1": {
+              "AMZNLINUXHVM": "ami-0fcdcdb074d2bac5f"
+          },
+          "us-west-2": {
+              "AMZNLINUXHVM": "ami-0f2176987ee50226e"
+          }
+      }
+  },
+  "Conditions": {
+      "CreateProdResources" : {
+          "Fn::Equals" : [
+              {
+                  "Ref" : "EnvironmentName"
+              }, 
+              "production"
+          ]
+      },
+      "CreateNonProdResources" : {
+          "Fn::Not": [
+              {
+                  "Fn::Equals" : [
+                      {
+                          "Ref" : "EnvironmentName"
+                      }, 
+                      "production"
+                  ]
+              }
+          ]
+      },
+      "GovCloudCondition": {
+          "Fn::Equals": [
+              {
+                  "Ref": "AWS::Region"
+              },
+              "us-gov-west-1"
+          ]
+      },
+      "UseSSL": {
+          "Fn::Not": [
+              {
+                  "Fn::Equals": [
+                      {
+                          "Ref": "SSLCertificateId"
+                      },
+                      ""
+                  ]
+              }
+          ]
+      }
+  },
+  "Resources": {
+      "ApplicationEFS": {
+          "Type": "AWS::EFS::FileSystem",
+          "Properties": {
+              "PerformanceMode": "generalPurpose",
+              "Encrypted": true,
+              "FileSystemTags": [
+                  {
+                      "Key": "Name",
+                      "Value": {
+                          "Fn::Join": [
+                              "-",
+                              [
+                                  {
+                                      "Ref": "AccountName"
+                                  },
+                                  {
+                                      "Ref": "EnvironmentName"
+                                  },                            
+                                  "EFS"
+                              ]
+                          ]
+                      }
+                  }
+              ]
+          }
+      },
+      "ApplicationEFSMountTarget1": {
+          "Type": "AWS::EFS::MountTarget",
+          "Properties": {
+              "FileSystemId": {
+                  "Ref": "ApplicationEFS"
+              },
+              "SubnetId": {
+                  "Fn::Select": [
+                      "0",
+                      {
+                          "Ref": "WebServerSubnets"
+                      }
+                  ]
+              },
+              "SecurityGroups": [
+                  {
+                      "Ref": "EFSSecurityGroup"
+                  }
+              ]
+          }
+      },
+      "ApplicationEFSMountTarget2": {
+          "Type": "AWS::EFS::MountTarget",
+          "Properties": {
+              "FileSystemId": {
+                  "Ref": "ApplicationEFS"
+              },
+              "SubnetId": {
+                  "Fn::Select": [
+                      "1",
+                      {
+                          "Ref": "WebServerSubnets"
+                      }
+                  ]
+              },
+              "SecurityGroups": [
+                  {
+                      "Ref": "EFSSecurityGroup"
+                  }
+              ]
+          }
+      },
+      "WebServerAsg": {
+          "Type": "AWS::AutoScaling::AutoScalingGroup",            
+          "Properties": {
+              "AutoScalingGroupName": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },
+                          {
+                              "Ref": "EnvironmentName"
+                          },                            
+                          "ASG"
+                      ]
+                  ]
+              },
+              "DesiredCapacity": {
+                  "Ref": "WebServerDesiredCapacity"
+              },
+              "HealthCheckType": "ELB",
+              "HealthCheckGracePeriod": 60,    
+              "LaunchConfigurationName": {
+                  "Ref": "WebServerLC"
+              },
+              "MinSize": {
+                  "Ref": "WebServerMinSize"
+              },
+              "MaxSize": {
+                  "Ref": "WebServerMaxSize"
+              },
+              "TargetGroupARNs": [
+                  {
+                      "Ref": "NLBTargetGroup80" 
+                  },
+                  {
+                      "Ref": "NLBTargetGroup443"
+                  }
+              ],
+              "TerminationPolicies":[
+                  "OldestInstance",
+                  "Default"
+              ],
+              "VPCZoneIdentifier": {
+                  "Ref": "WebServerSubnets"
+              },
+              "NotificationConfiguration": {
+                  "TopicARN": {
+                      "Ref": "NotificationTopic"
+                  },
+                  "NotificationTypes": [
+                      "autoscaling:EC2_INSTANCE_LAUNCH",
+                      "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                      "autoscaling:EC2_INSTANCE_TERMINATE",
+                      "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+                  ]
+              },
+              "Tags": [
+                  {
+                      "Key": "Name",
+                      "Value": {
+                          "Fn::Join": [
+                              "-",
+                              [
+                                  {
+                                      "Ref": "AccountName"
+                                  },
+                                  {
+                                      "Ref": "EnvironmentName"
+                                  }, 
+                                  "WebServer"
+                              ]
+                          ]
+                      },
+                      "PropagateAtLaunch": "true"
+                  }
+              ]
+          },
+          "UpdatePolicy": {
+              "AutoScalingRollingUpdate": {
+                  "MinInstancesInService": "1",
+                  "MaxBatchSize": "1",
+                  "PauseTime" : "PT15M",
+                  "WaitOnResourceSignals": "true"
+              }
+          }
+      },
+      "WebServerLC": {
+          "Type": "AWS::AutoScaling::LaunchConfiguration",
+          "Metadata": {
+              "AWS::CloudFormation::Init": {
+                  "configSets": {
+                      "install_application": [
+                          "install_cfn",
+                          "mount_efs",
+                          {
+                              "Fn::Join": [
+                                  "",
+                                  [
+                                      "install-packageSet-",
+                                      {
+                                          "Ref": "PhpVersion"
+                                      }
+                                  ]
+                              ]
+                          },
+                          "createdb",
+                          "application",
+                          "install_codedeploy"                    
+                      ]
+                  },
+                  "install_cfn": {
+                      "files": {
+                          "/etc/cfn/cfn-hup.conf": {
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "[main]\n",
+                                          "stack=",
+                                          {
+                                              "Ref": "AWS::StackId"
+                                          },
+                                          "\n",
+                                          "region=",
+                                          {
+                                              "Ref": "AWS::Region"
+                                          },
+                                          "\n",
+                                          "interval=1\n"
+                                      ]
+                                  ]
+                              },
+                              "mode": "000400",
+                              "owner": "root",
+                              "group": "root"
+                          },
+                          "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "[cfn-auto-reloader-hook]\n",
+                                          "triggers=post.update\n",
+                                          "path=Resources.WebServerLC.Metadata.AWS::CloudFormation::Init\n",
+                                          "action=/opt/aws/bin/cfn-init -v ",
+                                          "--stack ",
+                                          {
+                                              "Ref": "AWS::StackName"
+                                          },
+                                          " ",
+                                          "--resource WebServerLC ",
+                                          "--configsets install_application ",
+                                          "--region ",
+                                          {
+                                              "Ref": "AWS::Region"
+                                          },
+                                          "\n"
+                                      ]
+                                  ]
+                              },
+                              "mode": "000400",
+                              "owner": "root",
+                              "group": "root"
+                          }
+                      },
+                      "services": {
+                          "sysvinit": {
+                              "cfn-hup": {
+                                  "enabled": "true",
+                                  "ensureRunning": "true",
+                                  "files": [
+                                      "/etc/cfn/cfn-hup.conf",
+                                      "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                                  ]
+                              }
+                          }
+                      }
+                  },
+                  "mount_efs": {
+                      "packages": {
+                          "yum": {
+                              "nfs-utils": []
+                          }
+                      },
+                      "files": {
+                          "/tmp/mount-efs.sh": {
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "#!/bin/bash\n",
+                                          "LINE=\"",
+                                          {
+                                              "Fn::Join": [
+                                                  "",
+                                                  [
+                                                      {
+                                                          "Ref": "ApplicationEFS"
+                                                      },
+                                                      ".efs.",
+                                                      {
+                                                          "Ref": "AWS::Region"
+                                                      },
+                                                      ".amazonaws.com",
+                                                      ":/ "
+                                                  ]
+                                              ]
+                                          },
+                                          "/mnt/environment_shared nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0\"\n",
+                                          "grep -q \"$LINE\" /etc/fstab || echo \"$LINE\" >> /etc/fstab\n"
+                                      ]
+                                  ]
+                              },
+                              "mode": "000500",
+                              "owner": "root",
+                              "group": "root"
+                          }
+                      },
+                      "commands": {
+                          "01_append_fstab": {
+                              "command": "/tmp/mount-efs.sh"
+                          },
+                          "02_create_application_dir": {
+                              "command": "mkdir -p /mnt/environment_shared",
+                              "test": "test ! -e /var/environment_shared"
+                          },
+                          "03_mount_efs": {
+                              "command": "mount -a"
+                          }
+                      }
+                  },
+                  "install-packageSet-php56": {
+                      "packages": {
+                          "yum": {
+                              "git": [],
+                              "httpd24": [],
+                              "php56": [],
+                              "php56-cli": [],
+                              "php56-common": [],
+                              "php56-pdo": [],
+                              "php56-mysqlnd": [],
+                              "php56-xml": [],
+                              "php56-gd": [],
+                              "libssh2": [],
+                              "php56-pecl-ssh2": [],
+                              "php56-mbstring": [],
+                              "php56-fpm": [],
+                              "php56-opcache": [],
+                              "php56-pecl-memcached": []
+                          }
+                      }
+                  },
+                  "install-packageSet-php70": {
+                      "packages": {
+                          "yum": {
+                              "git": [],
+                              "httpd24": [],
+                              "php70": [],
+                              "php70-cli": [],
+                              "php70-zip": [],
+                              "php70-common": [],
+                              "php70-pdo": [],
+                              "php70-mysqlnd": [],
+                              "php70-xml": [],
+                              "php70-gd": [],
+                              "libssh2": [],
+                              "php70-pecl-ssh2": [],
+                              "php70-mbstring": [],
+                              "php70-fpm": [],
+                              "php70-opcache": [],
+                              "php70-pecl-memcached": []
+                          }
+                      }
+                  },
+                  "install-packageSet-php71": {
+                      "packages": {
+                          "yum": {
+                              "git": [],
+                              "httpd24": [],
+                              "php71": [],
+                              "php71-cli": [],
+                              "php71-common": [],
+                              "php71-pdo": [],
+                              "php71-mysqlnd": [],
+                              "php71-xml": [],
+                              "php71-gd": [],
+                              "libssh2": [],
+                              "php71-pecl-ssh2": [],
+                              "php71-mbstring": [],
+                              "php71-fpm": [],
+                              "php71-opcache": [],
+                              "php71-pecl-memcached": []
+                          }
+                      }
+                  },
+                  "install-packageSet-php72": {
+                      "packages": {
+                          "yum": {
+                              "git": [],
+                              "httpd24": [],
+                              "php72": [],
+                              "php72-cli": [],
+                              "php72-common": [],
+                              "php72-pdo": [],
+                              "php72-mysqlnd": [],
+                              "php72-xml": [],
+                              "php72-gd": [],
+                              "libssh2": [],
+                              "php72-pecl-ssh2": [],
+                              "php72-mbstring": [],
+                              "php72-fpm": [],
+                              "php72-opcache": [],
+                              "php72-pecl-memcached": []
+                          }
+                      }
+                  },
+                  "createdb": {
+                      "packages": {
+                          "yum": {
+                              "mysql57": []
+                          }
+                      },
+                      "files": {
+                          "/tmp/setup_applicationdb.sql": {
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "CREATE DATABASE IF NOT EXISTS ",
+                                          {
+                                              "Ref": "ApplicationDbName"
+                                          },
+                                          " CHARACTER SET UTF8 COLLATE utf8_general_ci;\n",
+                                          "GRANT ALL ON ",
+                                          {
+                                              "Ref": "ApplicationDbName"
+                                          },
+                                          ".* TO '",
+                                          {
+                                              "Ref": "ApplicationDbUsername"
+                                          },
+                                          "'@'%' IDENTIFIED BY '",
+                                          {
+                                              "Ref": "ApplicationDbUserPassword"
+                                          },
+                                          "';\n"                                          
+                                      ]
+                                  ]
+                              },
+                              "mode": "000400",
+                              "owner": "root",
+                              "group": "root"
+                          }
+                      },
+                      "commands": {
+                          "01_runQuery": {
+                              "command": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "mysql -u ",
+                                          {
+                                              "Ref": "DBMasterUsername"
+                                          },
+                                          " --password='",
+                                          {
+                                              "Ref": "DBMasterUserPassword"
+                                          },
+                                          "'",
+                                          " -h ",
+                                          {
+                                              "Ref": "DBEndpointAddress"
+                                          },
+                                          " < /tmp/setup_applicationdb.sql || error_exit 'Failed to create database user'\n"
+                                      ]
+                                  ]
+                              }
+                          },
+                          "02_cleanup": {
+                              "command": "sudo rm -f /tmp/setup_applicationdb.sql"
+                          }
+                      }
+                  },
+                  "install_codedeploy": {
+                      "files": {
+                          "/tmp/install_codedeploy_agent.sh": {
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [    
+                                          "wget https://aws-codedeploy-",
+                                          {
+                                              "Ref": "AWS::Region"
+                                          },
+                                          ".s3.",
+                                          {
+                                            "Ref": "AWS::Region"
+                                          },
+                                          ".amazonaws.com/latest/install\n",
+                                          "chmod +x ./install\n",
+                                          "./install auto  && rm ./install\n"                                                                     
+                                      ]
+                                  ]
+                              },
+                              "mode": "000700",
+                              "owner": "root",
+                              "group": "root"
+                          }
+                      },
+                      "commands": {
+                          "01_get_agent": {
+                              "command": "/tmp/install_codedeploy_agent.sh"
+                          }
+                      },
+                      "services": {
+                          "sysvinit": {
+                              "codedeploy-agent": {
+                                  "enabled": "true",
+                                  "ensureRunning": "true"
+                              }
+                          }
+                      }
+                  },
+                  "application": {    
+                      "packages": {
+                          "yum": {
+                              "mod24_ssl.x86_64": []
+                          }
+                      },                
+                      "files": {
+                          "/etc/profile.d/aws_env.sh": { 
+                              "content": {
+                                "Fn::Join": [
+                                  "",
+                                  [
+                                    "export RDS_HOSTNAME=\"",
+                                    {
+                                      "Ref": "DBEndpointAddress"
+                                    },
+                                    "\"\n",
+                                    "export RDS_PORT=\"",
+                                    {
+                                      "Ref": "DBPort"
+                                    },
+                                    "\"\n",
+                                    "export RDS_DB_NAME=\"",
+                                    {
+                                      "Ref": "ApplicationDbName"
+                                    },
+                                    "\"\n",
+                                    "export RDS_USERNAME=\"",
+                                    {
+                                      "Ref": "ApplicationDbUsername"
+                                    },
+                                    "\"\n",
+                                    "export RDS_PASSWORD=\"",
+                                    {
+                                      "Ref": "ApplicationDbUserPassword"
+                                    },
+                                    "\"\n",
+                                    "export ENVIRONMENT=\"",
+                                    {
+                                      "Ref": "EnvironmentName"
+                                    },
+                                    "\"\n",
+                                    "export NAMESPACE=\"",
+                                    {
+                                        "Fn::Join": [
+                                            "-",
+                                            [
+                                                {
+                                                    "Ref": "AccountName"
+                                                },
+                                                {
+                                                    "Ref": "EnvironmentName"
+                                                }
+                                            ]
+                                        ]
+                                    },
+                                    "\"\n",
+                                    "export SITEURL=\"",
+                                    {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                {
+                                                    "Fn::If": [
+                                                        "UseSSL",
+                                                        "https://",
+                                                        "http://"
+                                                    ]
+                                                },
+                                                {
+                                                    "Fn::If": [
+                                                        "CreateProdResources",
+                                                        { 
+                                                            "Fn::GetAtt": [
+                                                                "NetworkLoadBalancerEIP",
+                                                                "DNSName"
+                                                            ]
+                                                        },
+                                                        { 
+                                                            "Fn::GetAtt": [
+                                                                "NetworkLoadBalancer",
+                                                                "DNSName"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        ]
+                                    },
+                                    "\"\n"
+                                  ]
+                                ]
+                              }
+                          },
+                          "/etc/httpd/conf.d/aws_env.conf": { 
+                              "content": {
+                                "Fn::Join": [
+                                  "",
+                                  [
+                                    "SetEnv RDS_HOSTNAME \"",
+                                    {
+                                      "Ref": "DBEndpointAddress"
+                                    },
+                                    "\"\n",
+                                    "SetEnv RDS_PORT \"",
+                                    {
+                                      "Ref": "DBPort"
+                                    },
+                                    "\"\n",
+                                    "SetEnv RDS_DB_NAME \"",
+                                    {
+                                      "Ref": "ApplicationDbName"
+                                    },
+                                    "\"\n",
+                                    "SetEnv RDS_USERNAME \"",
+                                    {
+                                      "Ref": "DBMasterUsername"
+                                    },
+                                    "\"\n",
+                                    "SetEnv RDS_PASSWORD \"",
+                                    {
+                                      "Ref": "DBMasterUserPassword"
+                                    },
+                                    "\"\n",
+                                    "SetEnv ENVIRONMENT \"",
+                                    {
+                                      "Ref": "EnvironmentName"
+                                    },
+                                    "\"\n",
+                                    "SetEnv NAMESPACE \"",
+                                    {
+                                        "Fn::Join": [
+                                            "-",
+                                            [
+                                                {
+                                                    "Ref": "AccountName"
+                                                },
+                                                {
+                                                    "Ref": "EnvironmentName"
+                                                }
+                                            ]
+                                        ]
+                                    },
+                                    "\"\n",
+                                    "SetEnv SITEURL \"",
+                                    {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                {
+                                                    "Fn::If": [
+                                                        "UseSSL",
+                                                        "https://",
+                                                        "http://"
+                                                    ]
+                                                },
+                                                {
+                                                    "Fn::If": [
+                                                        "CreateProdResources",
+                                                        { 
+                                                            "Fn::GetAtt": [
+                                                                "NetworkLoadBalancerEIP",
+                                                                "DNSName"
+                                                            ]
+                                                        },
+                                                        { 
+                                                            "Fn::GetAtt": [
+                                                                "NetworkLoadBalancer",
+                                                                "DNSName"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        ]
+                                    },
+                                    "\"\n"
+                                  ]
+                                ]
+                              }
+                          },
+                          "/etc/php.d/max_filesize.ini" : {
+                              "mode": "000644",
+                              "owner": "root",
+                              "group": "root",
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "upload_max_filesize = 3G\n",
+                                          "post_max_size = 3G\n"
+                                      ]
+                                  ]
+                              }
+                          },
+                          "/tmp/efs_restore.sh" : {                                                        
+                            "mode": "000700",
+                            "owner": "ec2-user",
+                            "group": "ec2-user",
+                            "content": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                      "#!/bin/bash \n",
+                                      "#################################################\n",
+                                      "# If /mnt/environment-shared is empty ...\n",
+                                      "# Download the latest backup file from S3\n",
+                                      "# Unzip the file to the local directory\n",
+                                      "# Remove the backup file\n",
+                                      "################################################\n",
+                                      "if [ \"$(ls -A /mnt/environment_shared)\" ]; then\n",
+                                      "        echo 'environment_shared not empty.  Doing nothing.'\n",
+                                      "else\n",
+                                      "        cd /mnt/environment_shared\n",
+                                      "        S3URL=\"s3://",
+                                      {
+                                        "Ref": "AccountName"
+                                      },
+                                      "-client-shared/efs_backup/",
+                                      {
+                                        "Ref": "AccountName"
+                                      },
+                                      "-production\"\n",
+                                      "        FILE=`aws s3 ls $S3URL/ | tail -n 1`\n",
+                                      "        IFS=\" \"\n",
+                                      "        # $File needs to be split at the spaces.  We need Array[3] (the filename)\n",
+                                      "        ARRAY=($FILE)\n",
+                                      "        aws s3 cp $S3URL/${ARRAY[3]} .\n",
+                                      "        tar -xzf ${ARRAY[3]}\n",
+                                      "        rm ${ARRAY[3]}\n",
+                                      "        chown -R apache:apache /mnt/environment_shared\n",
+                                      "fi\n"
+                                    ]
+                                ]
+                            }
+                          },
+                          "/tmp/create_app_directory.sh": {                              
+                              "mode": "000700",
+                              "owner": "ec2-user",
+                              "group": "ec2-user",
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "# .bashrc\n",
+                                          "\n",
+                                          "APPDIR=/var/www/",
+                                          {
+                                              "Ref": "AccountName"
+                                          },
+                                          "\n",
+                                          "HTDOCS=$APPDIR",
+                                          {
+                                              "Ref": "Docroot"
+                                          },
+                                          "\n",
+                                          "if ! [ -d $HTDOCS ]; then\n",
+                                          "    mkdir -p $HTDOCS\n",
+                                          "fi\n",   
+                                          "chmod 770 $APPDIR\n",
+                                          "if ! [ -f $HTDOCS/index.php ]; then\n",
+                                          "    echo \"Server ready for deployment...\" > $HTDOCS/index.php\n",
+                                          "fi\n",                                            
+                                          "chown -R ec2-user:apache $APPDIR\n"
+                                      ]
+                                  ]
+                              }
+                          },
+                          "/home/ec2-user/.bashrc" : {
+                              "mode": "000644",
+                              "owner": "ec2-user",
+                              "group": "ec2-user",
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "# .bashrc\n",
+                                          "\n",
+                                          "# Source global definitions\n",
+                                          "if [ -f /etc/bashrc ]; then\n",
+                                          "        . /etc/bashrc\n",
+                                          "fi\n",
+                                          "\n",
+                                          "# User specific aliases and functions\n",
+                                          "export PATH=\"/home/ec2-user/.composer/vendor/bin:$PATH\"\n"
+                                      ]
+                                  ]
+                              }
+                          },
+                          "/etc/httpd/conf.d/application.conf": {
+                              "content": {
+                                  "Fn::Join": [
+                                      "",
+                                      [
+                                          "<VirtualHost *:80>\n",
+                                          "    ServerAdmin ",
+                                          {
+                                              "Ref": "ApplicationSiteAdminEmail"
+                                          },
+                                          "\n",
+                                          "    ServerName  ",
+                                          {
+                                              "Ref": "ApplicationSiteDomain"
+                                          },
+                                          "\n",
+                                          "    ServerAlias ",
+                                          {
+                                              "Fn::Join": [
+                                                  "",
+                                                  [
+                                                      "www.",
+                                                      {
+                                                          "Ref": "ApplicationSiteDomain"
+                                                      }
+                                                  ]
+                                              ]
+                                          },
+                                          "\n",
+                                          "    DocumentRoot /var/www/",
+                                          {
+                                              "Ref": "AccountName"
+                                          },
+                                          {
+                                            "Ref": "Docroot"
+                                          },
+                                          "\n",
+                                          "    <Directory /var/www/",
+                                          {
+                                            "Ref": "AccountName"
+                                          },
+                                          {
+                                            "Ref": "Docroot"
+                                          },
+                                          ">\n",
+                                          "        Options -Indexes -MultiViews +FollowSymLinks\n",
+                                          "        AllowOverride All\n",
+                                          "        Order allow,deny\n",
+                                          "        allow from all\n",
+                                          "    </Directory>\n",
+                                          {
+                                              "Fn::If": [
+                                                  "UseSSL",
+                                                  {
+                                                      "Fn::Join": [
+                                                          "",
+                                                          [
+                                                              "    RewriteEngine On\n",
+                                                              "    RewriteCond %{HTTPS} !=on\n",
+                                                              "    RewriteRule .* https://%{HTTP:Host}%{REQUEST_URI} [L,R=permanent]\n"
+                                                          ]
+                                                      ]
+                                                  },
+                                                  ""
+                                              ]
+                                          },
+                                          "    LogLevel warn\n",
+                                          "    ErrorLog /var/log/httpd/application-error.log\n",
+                                          "    CustomLog /var/log/httpd/application-access.log combined\n",
+                                          "</VirtualHost>\n",
+                                          "ServerSignature Off\n",
+                                          "ServerTokens Prod\n"
+                                      ]
+                                  ]
+                              },
+                              "mode": "000644",
+                              "owner": "root",
+                              "group": "root"
+                            },
+                            "/etc/httpd/conf.d/ssl.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "# HEAVILY REDACTED\n",
+                                            "# Original file should be located at ./ssl.conf.bak\n",
+                                            "\n",
+                                            "Listen 443 Https\n",
+                                            "SSLPassPhraseDialog exec:/usr/libexec/httpd-ssl-pass-dialog\n",
+                                            "SSLSessionCache         shmcb:/run/httpd/sslcache(512000)\n",
+                                            "SSLSessionCacheTimeout  300\n",
+                                            "SSLRandomSeed startup file:/dev/urandom  256\n",
+                                            "SSLRandomSeed connect builtin\n",
+                                            "SSLCryptoDevice builtin\n",
+                                            "<VirtualHost *:443>\n",
+                                            "    ServerAdmin ",
+                                            {
+                                                "Ref": "ApplicationSiteAdminEmail"
+                                            },
+                                            "\n",
+                                            "    ServerName  ",
+                                            {
+                                                "Ref": "ApplicationSiteDomain"
+                                            },
+                                            "\n",
+                                            "    ServerAlias ",
+                                            {
+                                                "Fn::Join": [
+                                                    "",
+                                                    [
+                                                        "www.",
+                                                        {
+                                                            "Ref": "ApplicationSiteDomain"
+                                                        }
+                                                    ]
+                                                ]
+                                            },
+                                            "\n",
+                                            "    DocumentRoot /var/www/",
+                                            {
+                                                "Ref": "AccountName"
+                                            },
+                                            {
+                                              "Ref": "Docroot"
+                                            },
+                                            "\n",
+                                            "\n",
+                                            "ErrorLog logs/ssl_error_log\n",
+                                            "TransferLog logs/ssl_access_log\n",
+                                            "LogLevel warn\n",
+                                            "SSLEngine on\n",
+                                            "SSLProtocol all -SSLv3\n",
+                                            "SSLProxyProtocol all -SSLv3\n",
+                                            "SSLHonorCipherOrder on\n",
+                                            "SSLCertificateFile /etc/pki/tls/certs/localhost.crt\n",
+                                            "SSLCertificateKeyFile /etc/pki/tls/private/localhost.key\n",
+                                            "<FilesMatch \"\\.(cgi|shtml|phtml|php)$\">\n",
+                                            "    SSLOptions +StdEnvVars\n",
+                                            "</FilesMatch>\n",
+                                            "<Directory \"/var/www/cgi-bin\">\n",
+                                            "    SSLOptions +StdEnvVars\n",
+                                            "</Directory>\n",
+                                            "<Directory /var/www/",
+                                            {
+                                              "Ref": "AccountName"
+                                            },
+                                            {
+                                              "Ref": "Docroot"
+                                            },
+                                            ">\n",
+                                            " Options -Indexes -MultiViews +FollowSymLinks\n",
+                                            " AllowOverride All\n",
+                                            " Order allow,deny\n",
+                                            " allow from all\n",
+                                            "</Directory>\n",
+                                            "BrowserMatch \"MSIE [2-5]\" \\\n",
+                                            "        nokeepalive ssl-unclean-shutdown \\\n",
+                                            "        downgrade-1.0 force-response-1.0\n",
+                                            "CustomLog logs/ssl_request_log \\\n",
+                                            "          \"%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \\\"%r\\\" %b\"\n",
+                                            "</VirtualHost>\n"
+                                        ]
+                                    ]
+                                },
+                                "mode": "000644",
+                                "owner": "root",
+                                "group": "root"
+                          }
+                      },
+                      "commands": {
+                          "01_install_composer": {
+                              "command": "curl -sS https://getcomposer.org/installer | php",
+                              "cwd": "/home/ec2-user",
+                              "env": {
+                                  "HOME": "/home/ec2-user"
+                              }
+                          },
+                          "02_install_drush": {
+                              "command": "/home/ec2-user/composer.phar global require drush/drush:8.*",
+                              "test": "test -e /home/ec2-user/composer.phar",
+                              "env": {
+                                  "HOME": "/home/ec2-user"
+                              }
+                          },
+                          "03_clean_httpd_confd_dir": {
+                              "command": "rm -f autoindex.conf notrace.conf userdir.conf welcome.conf",
+                              "cwd": "/etc/httpd/conf.d/"
+                          },
+                          "04_chown_efs": {
+                              "command": "chown ec2-user:apache /mnt/environment_shared && chmod -R 777 /mnt/environment_shared",
+                              "test": "test -e /mnt/environment_shared"
+                          },
+                          "05_create_application_directory": {
+                              "command": "/tmp/create_app_directory.sh"                            
+                          }
+                      },
+                      "services": {
+                          "sysvinit": {
+                              "httpd": {
+                                  "enabled": "true",
+                                  "ensureRunning": "true",
+                                  "files": [
+                                      "/etc/httpd/conf.d/application.conf",
+                                      "/etc/php.ini"
+                                  ]
+                              }
+                          }
+                      }
+                  }
+              }
+          },
+          "Properties": {
+              "ImageId": {
+                  "Fn::FindInMap": [
+                      "AWSAMIRegionMap",
+                      {
+                          "Ref": "AWS::Region"
+                      },
+                      "AMZNLINUXHVM"
+                  ]
+              },
+              "InstanceType": {
+                  "Ref": "WebServerInstanceType"
+              },
+              "IamInstanceProfile": {
+                  "Ref": "CodeDeployTargetServerProfile"
+              },
+              "SecurityGroups": [
+                  {
+                      "Ref": "WebServerSecurityGroup"
+                  }
+              ],
+              "KeyName": {
+                  "Ref": "KeyPair"
+              },
+              "UserData": {
+                  "Fn::Base64": {
+                      "Fn::Join": [
+                          "",
+                          [
+                              "#!/bin/bash\n",
+                              "yum update -y aws-cfn-bootstrap\n",
+                              "yum update -y",
+                              "\n",
+                              "/opt/aws/bin/cfn-init -v ",
+                              "--stack ",
+                              {
+                                  "Ref": "AWS::StackName"
+                              },
+                              " ",
+                              "--resource WebServerLC ",
+                              "--configsets install_application ",
+                              "--region ",
+                              {
+                                  "Ref": "AWS::Region"
+                              },
+                              "\n",                                
+                              "/opt/aws/bin/cfn-signal -e $? --stack ",
+                              {
+                                  "Ref": "AWS::StackName"
+                              },
+                              " --resource WebServerAsg --region ",
+                              {
+                                  "Ref": "AWS::Region"
+                              },
+                              "\n"
+                          ]
+                      ]
+                  }
+              }
+          }
+      },
+      "NotificationTopic": {
+          "Type": "AWS::SNS::Topic",
+          "Properties": {
+              "Subscription": [
+                  {
+                      "Endpoint": {
+                          "Ref": "AutoScalingNotificationEmail"
+                      },
+                      "Protocol": "email"
+                  }
+              ],
+              "TopicName": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },
+                          {
+                              "Ref": "EnvironmentName"
+                          },
+                          "ApplicationSnsTopic"
+                      ]
+                  ]
+              }
+          }
+      },
+      "WebServerTargetTrackingScalingPolicy": {
+          "Type": "AWS::AutoScaling::ScalingPolicy",
+          "Properties": {
+              "AutoScalingGroupName": {
+                  "Ref": "WebServerAsg"
+              },
+              "Cooldown": "60",
+              "PolicyType": "TargetTrackingScaling",
+              "TargetTrackingConfiguration": {
+                  "PredefinedMetricSpecification": {
+                      "PredefinedMetricType": "ASGAverageCPUUtilization"
+                  },
+                  "TargetValue": 75.0
+              }
+          }
+      },
+      "LbEip": {
+        "Condition" : "CreateProdResources",
+        "Type": "AWS::EC2::EIP",
+        "Properties": {
+          "Domain": "VPC",
+          "Tags": [
+            {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },                            
+                          {
+                              "Ref": "EnvironmentName"
+                          },
+                          "LoadBalancerEIP"
+                      ]
+                  ]
+              }
+            }
+          ]
+        }
+      },
+      "LbEip2": {
+        "Condition" : "CreateProdResources",
+        "Type": "AWS::EC2::EIP",
+        "Properties": {
+          "Domain": "VPC",
+          "Tags": [
+            {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },
+                          {
+                              "Ref": "EnvironmentName"
+                          },
+                          "LoadBalancerEIP2"
+                      ]
+                  ]
+              }
+            }
+          ]
+        }
+      },
+      "NetworkLoadBalancer": {
+          "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+          "Condition": "CreateNonProdResources",
+          "Properties": {    
+              "Name": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },
+                          {
+                              "Ref": "EnvironmentName"
+                          },
+                          "NLB"
+                      ]
+                  ]
+              },
+              "Subnets": [
+                  { "Ref": "PublicSubnet1ID" },
+                  { "Ref": "PublicSubnet2ID" }
+              ],
+              "Tags": [
+                  {
+                      "Key": "Name",
+                      "Value": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                {
+                                    "Ref": "AccountName"
+                                },
+                                {
+                                    "Ref": "EnvironmentName"
+                                },
+                                "-NetworkLoadbalancer"
+                            ]
+                        ]
+                    }
+                  }
+              ],
+              "Type": "network"
+          }
+      },
+      "NetworkLoadBalancerEIP": {
+          "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+          "Condition": "CreateProdResources",
+          "DependsOn":["LbEip", "LbEip2"],
+          "Properties": {    
+              "Name": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },
+                          {
+                              "Ref": "EnvironmentName"
+                          },
+                          "NLB"
+                      ]
+                  ]
+              },
+              "SubnetMappings": [
+                {
+                  "AllocationId": {
+                    "Fn::GetAtt": [
+                      "LbEip",
+                      "AllocationId"
+                    ]
+                  },
+                  "SubnetId": {
+                    "Ref": "PublicSubnet1ID"
+                  }
+                },
+                {
+                  "AllocationId": {
+                    "Fn::GetAtt": [
+                      "LbEip2",
+                      "AllocationId"
+                    ]
+                  },
+                  "SubnetId": {
+                    "Ref": "PublicSubnet2ID"
+                  }
+                }
+              ],
+              "Tags": [
+                  {
+                      "Key": "Name",
+                      "Value": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                {
+                                    "Ref": "AccountName"
+                                },
+                                {
+                                    "Ref": "EnvironmentName"
+                                },
+                                "-NetworkLoadbalancer"
+                            ]
+                        ]
+                    }
+                  }
+              ],
+              "Type": "network"
+          }
+      },
+      "NLBTargetGroup80": {
+          "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+          "Properties": { 
+              "Name": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },
+                          {
+                              "Ref": "EnvironmentName"
+                          },
+                          "NLBTG80"
+                      ]
+                  ]
+              },       
+              "HealthCheckProtocol": "HTTP", 
+              "HealthCheckPath": "/",    
+              "HealthCheckPort": 80,     
+              "HealthyThresholdCount": 3,
+              "HealthCheckIntervalSeconds": 10, 
+              "Port": 80,
+              "Protocol": "TCP",
+              "UnhealthyThresholdCount": 3,
+              "VpcId": {
+                  "Ref": "VPCID"
+              },
+              "TargetGroupAttributes": [
+                  {
+                    "Key": "deregistration_delay.timeout_seconds",
+                    "Value": "20"
+                  }
+              ]
+          }
+      },
+      "NLBTargetGroup443": {
+          "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+          "Properties": { 
+              "Name": {
+                  "Fn::Join": [
+                      "-",
+                      [
+                          {
+                              "Ref": "AccountName"
+                          },
+                          {
+                              "Ref": "EnvironmentName"
+                          },
+                          "NLBTG443"
+                      ]
+                  ]
+              },    
+              "HealthCheckProtocol": "HTTPS", 
+              "HealthCheckPath": "/",    
+              "HealthCheckPort": 443,     
+              "HealthyThresholdCount": 3,
+              "HealthCheckIntervalSeconds": 10, 
+              "Port": 443,
+              "Protocol": "TCP",
+              "UnhealthyThresholdCount": 3,
+              "VpcId": {
+                  "Ref": "VPCID"
+              },
+              "TargetGroupAttributes": [
+                  {
+                    "Key": "deregistration_delay.timeout_seconds",
+                    "Value": "20"
+                  }
+              ]
+          }
+      },
+      "NLBHTTPSListener": {
+          "Condition": "UseSSL",
+          "Type": "AWS::ElasticLoadBalancingV2::Listener",
+          "Properties": {
+              "DefaultActions": [
+                  {
+                      "Type": "forward",
+                      "TargetGroupArn": {
+                          "Ref": "NLBTargetGroup443"
+                      }
+                  }
+              ],
+              "LoadBalancerArn": {
+                  "Fn::If": [
+                      "CreateProdResources",
+                      { 
+                          "Ref": "NetworkLoadBalancerEIP" 
+                      },
+                      {
+                          "Ref": "NetworkLoadBalancer"
+                      }
+                  ]
+              },
+              "Port": 443,
+              "Protocol": "TCP"
+          }
+      },
+      "NLBHTTPListener": {
+          "Type": "AWS::ElasticLoadBalancingV2::Listener",
+          "Properties": {
+              "DefaultActions": [
+                  {
+                      "Type": "forward",
+                      "TargetGroupArn": {
+                          "Ref": "NLBTargetGroup80"
+                      }
+                  }
+              ],
+              "LoadBalancerArn": {
+                  "Fn::If": [
+                      "CreateProdResources",
+                      { 
+                          "Ref": "NetworkLoadBalancerEIP" 
+                      },
+                      {
+                          "Ref": "NetworkLoadBalancer"
+                      }
+                  ]
+              },
+              "Port": 80,
+              "Protocol": "TCP"
+          }
+      },
+      "CodeDeployServerRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+              "AssumeRolePolicyDocument": {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                      {
+                          "Effect": "Allow",
+                          "Principal": {
+                              "Service": [
+                                  "ec2.amazonaws.com",
+                                  {
+                                      "Fn::Join": [
+                                          "",
+                                          [
+                                              "codedeploy.",
+                                              {
+                                                  "Ref": "AWS::Region"
+                                              },
+                                              ".amazonaws.com"
+                                          ]
+                                      ]
+                                  }
+                              ]
+                          },
+                          "Action": [
+                              "sts:AssumeRole"
+                          ]
+                      }
+                  ]
+              },
+              "Path": "/",
+              "Policies": [                 
+                  {
+                      "PolicyName": "codedeployserverpolicy",
+                      "PolicyDocument": {
+                          "Version": "2012-10-17",
+                          "Statement": [
+                              {
+                                  "Effect": "Allow",
+                                  "Action": "codedeploy:*",
+                                  "Resource": [
+                                      {
+                                          "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${AccountName}"
+                                      }
+                                  ]
+                              },
+                              {
+                                  "Effect": "Allow",
+                                  "Action": [
+                                      "s3:Get*",
+                                      "s3:List*"
+                                  ],
+                                  "Resource": [
+                                      {
+                                          "Fn::Sub": "arn:aws:s3:::${AccountName}-pipeline-builds/*"
+                                      },
+                                      {
+                                        "Fn::Sub": "arn:aws:s3:::${AccountName}-client-shared"
+                                      },
+                                      {
+                                        "Fn::Sub": "arn:aws:s3:::${AccountName}-client-shared/*"
+                                      },
+                                      {
+                                          "Fn::Sub": "arn:aws:s3:::aws-codedeploy-${AWS::Region}/*"
+                                      }
+                                  ]
+                              },
+                              {
+                                  "Action": [
+                                    "autoscaling:AttachLoadBalancers",
+                                    "autoscaling:CompleteLifecycleAction",
+                                    "autoscaling:CreateAutoScalingGroup",
+                                    "autoscaling:DeleteAutoScalingGroup",
+                                    "autoscaling:DeleteLifecycleHook",
+                                    "autoscaling:Describe*",
+                                    "autoscaling:EnableMetricsCollection",
+                                    "autoscaling:EnterStandby",
+                                    "autoscaling:ExitStandby",
+                                    "autoscaling:PutLifecycleHook",
+                                    "autoscaling:PutNotificationConfiguration",
+                                    "autoscaling:PutScalingPolicy",
+                                    "autoscaling:PutScheduledUpdateGroupAction",
+                                    "autoscaling:RecordLifecycleActionHeartbeat",
+                                    "autoscaling:ResumeProcesses",
+                                    "autoscaling:SuspendProcesses",
+                                    "autoscaling:UpdateAutoScalingGroup",
+                                    "ec2:DescribeInstances",
+                                    "ec2:DescribeInstanceStatus",
+                                    "ec2:TerminateInstances",
+                                    "tag:GetResources",
+                                    "sns:Publish",
+                                    "cloudwatch:DescribeAlarms",
+                                    "cloudwatch:PutMetricAlarm",
+                                    "elasticloadbalancing:Describe*",
+                                    "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                                    "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                                    "elasticloadbalancing:RegisterTargets",
+                                    "elasticloadbalancing:DeregisterTargets"
+                                  ],
+                                  "Resource": "*",
+                                  "Effect": "Allow"
+                              }
+                          ]
+                      }
+                  }
+              ]
+          }
+      },
+      "CodeDeployTargetServerProfile": {
+          "Type": "AWS::IAM::InstanceProfile",
+          "Properties": {
+              "Path": "/",
+              "Roles": [
+                  {
+                      "Ref": "CodeDeployServerRole"
+                  }
+              ]
+          }
+      },
+      "DeploymentGroup": {
+        "Type": "AWS::CodeDeploy::DeploymentGroup",
+        "DependsOn": "WebServerAsg",
+        "Properties": {
+            "ApplicationName": {
+                "Ref": "AccountName"
+            },
+            "AutoScalingGroups": [
+                {
+                  "Ref": "WebServerAsg"
+                }          
+            ],
+            "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
+            "DeploymentGroupName": {
+                "Fn::Join": [
+                    "-",
+                    [
+                        {
+                            "Ref": "AccountName"
+                        },
+                        {
+                            "Ref": "EnvironmentName"
+                        }
+                    ]
+                ]
+            },
+            "Ec2TagFilters": [
+                {
+                    "Key": "Name",
+                    "Value": {
+                      "Fn::Join": [
+                          "-",
+                          [
+                              {
+                                  "Ref": "AccountName"
+                              },
+                              {
+                                  "Ref": "EnvironmentName"
+                              },
+                              "WebServer"
+                          ]
+                      ]
+                    },
+                    "Type": "KEY_AND_VALUE"
+                }
+            ],        
+            "ServiceRoleArn": {
+                "Fn::GetAtt": [
+                    "CodeDeployServerRole",
+                    "Arn"
+                ]
+            }
+        }
+    }
+  },
+  "Outputs": {
+      "ApplicationEFS": {
+        "Description": "Reference to the environment-shared EFS file system.",
+        "Value": {
+          "Ref": "ApplicationEFS"
+        }
+      },
+      "ELBURL": {
+          "Description": "The URL of the ELB that you should use to create a CNAME/ALIAS DNS record to point to your Domain e.g. mysite.com",
+          "Value": {
+              "Fn::Join": [
+                  "",
+                  [
+                      {
+                          "Fn::If": [
+                              "UseSSL",
+                              "https://",
+                              "http://"
+                          ]
+                      },
+                      {
+                          "Fn::If": [
+                              "CreateProdResources",
+                              { 
+                                  "Fn::GetAtt": [
+                                      "NetworkLoadBalancerEIP",
+                                      "DNSName"
+                                  ]
+                              },
+                              { 
+                                  "Fn::GetAtt": [
+                                      "NetworkLoadBalancer",
+                                      "DNSName"
+                                  ]
+                              }
+                          ]
+                      }
+                  ]
+              ]
+          }
+      }
+  }
+}

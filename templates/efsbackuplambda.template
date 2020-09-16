@@ -1,0 +1,411 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Application EFS backup template.",
+  "Parameters": {
+      "AccountName": {
+          "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+          "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+          "Description": "The name of the account.",
+          "Type": "String"
+      },
+      "EnvironmentName": {
+          "AllowedPattern": "[a-z]*",
+          "ConstraintDescription": "must contain only lowercase alpha characters.",
+          "Description": "The environment name.",
+          "Type": "String"
+      },
+      "PrivateSubnet": {
+        "Type": "String"
+      },
+      "EFSID": {
+        "Type": "String"
+      },
+      "Conditions": {
+         "CreateProdResources" : {
+            "Fn::Equals" : [
+                {
+                   "Ref" : "EnvironmentName"      
+                }, 
+                 "production"      
+                ]    
+            }
+          }
+  },
+  "Resources": {   
+    "EFSBackupLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "Path": "/",
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "efsbackuplambdapolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [ 
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                      {
+                          "Action": [
+                              "logs:CreateLogGroup",
+                              "logs:CreateLogStream",
+                              "logs:PutLogEvents"
+                          ],
+                          "Resource": "arn:aws:logs:*:*:log-group:/aws/lambda/*:*:*",
+                          "Effect": "Allow"
+                      },
+                      {
+                        "Sid": "VisualEditor0",
+                        "Effect": "Allow",
+                        "Action": [
+                            "iam:PassRole",
+                            "ec2:StartInstances",
+                            "ec2:RunInstances",
+                            "ec2:AssociateIamInstanceProfile"
+                        ],
+                        "Resource": "*"
+                    }
+                  ]
+              }
+              ]
+            }
+          }
+        ]
+      }
+    }, 
+    "EFSBackupRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "ec2.amazonaws.com"
+                            ]
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ]
+                    }
+                ]
+            },
+            "Path": "/",
+            "Policies": [   
+                {
+                    "PolicyName": "efsbackuppolicy",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [                            
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "s3:*"
+                                ],
+                                "Resource": [
+                                    {
+                                        "Fn::Sub": "arn:aws:s3:::${AccountName}-client-shared/*"
+                                    }
+                                ]
+                            },
+                            {
+                                "Action": [
+                                  "ec2:TerminateInstances"
+                                ],
+                                "Resource": "*",
+                                "Effect": "Allow"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "EFSBackupProfile": {
+        "Type": "AWS::IAM::InstanceProfile",
+        "Properties": {
+            "Path": "/",
+            "Roles": [
+                {
+                    "Ref": "EFSBackupRole"
+                }
+            ]
+        }
+    },  
+    "EFSBackupLambda": {
+        "Type": "AWS::Lambda::Function",
+        "Properties": {
+          "Description": "Spin up an ec2 instance to backup EFS",
+          "Handler" : "index.lambda_handler",
+          "Role": { 
+            "Fn::GetAtt": [
+              "EFSBackupLambdaRole",
+              "Arn"
+            ]
+          },
+          "Runtime": "python3.7",
+          "Timeout": 30,
+          "Code": {
+            "ZipFile": {
+              "Fn::Join": [
+                  "",
+                  [
+                      "import boto3\n",                        
+                      "import time\n",
+                      "region = 'us-east-1'\n", 
+                      "user_data_script  = \"\"\"#!/bin/bash\n", 
+                      "    instanceid=$(curl http://169.254.169.254/latest/meta-data/instance-id)\n", 
+                      "    date=`date +\"%Y-%m-%d-%H.%M.%S\"`\n", 
+                      "    \n",
+                      "    # Create the EFS mount point and mount the EFS\n", 
+                      "    mkdir /mnt/environment_shared\n", 
+                      "    mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ",
+                      {
+                        "Ref": "EFSID"
+                      },
+                      ".efs.us-east-1.amazonaws.com:/ /mnt/environment_shared\n", 
+                      "    \n", 
+                      "    # Tar the EFS fs and copy to S3\n", 
+                      "    cd /mnt/environment_shared\n", 
+                      "    tar czf /tmp/$date.tar.gz .\n", 
+                      "    aws s3 mv /tmp/$date.tar.gz s3://",
+                      {
+                        "Ref": "AccountName"
+                      },
+                      "-client-shared/efs_backup/",
+                      {
+                        "Fn::Join": [
+                          "-",
+                          [
+                            {
+                              "Ref": "AccountName"
+                            },
+                            {
+                              "Ref": "EnvironmentName"
+                            }
+                          ]
+                        ]
+                      },
+                      "/$date.tar.gz\n", 
+                      "    \n", 
+                      "    # Suicide!\n", 
+                      "    aws ec2 terminate-instances --instance-ids $instanceid --region us-east-1 \"\"\"\n", 
+                      "    \n", 
+                      "def lambda_handler(event, context):\n", 
+                      "    ec2 = boto3.client('ec2', region_name=region)\n", 
+                      "    new_instance = ec2.run_instances(\n", 
+                      "                        ImageId='ami-00068cd7555f543d5',\n", 
+                      "                        MinCount=1,\n", 
+                      "                        MaxCount=1,\n", 
+                      "                        KeyName='",
+                      {
+                        "Fn::Join": [
+                          "-",
+                          [
+                            {
+                              "Ref": "AccountName"
+                            },
+                            {
+                              "Ref": "EnvironmentName"
+                            },
+                            "keypair"
+                          ]
+                        ]
+                      },
+                      "',\n", 
+                      "                        InstanceType='t2.micro',\n", 
+                      "                        IamInstanceProfile={'Name':'",
+                      {
+                        "Ref": "EFSBackupProfile"
+                      },
+                      "'},\n", 
+                      "                        InstanceInitiatedShutdownBehavior='terminate',\n", 
+                      "                        SubnetId='",
+                      {
+                        "Ref": "PrivateSubnet"
+                      },
+                      "',\n", 
+                      "                        UserData=user_data_script\n",
+                      "    )"
+                  ]
+              ]
+            }
+          }
+      }
+    },
+    "EFSrestoreLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "Path": "/",
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "efsrestorelambdapolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [ 
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                      {
+                          "Action": [
+                              "logs:CreateLogGroup",
+                              "logs:CreateLogStream",
+                              "logs:PutLogEvents"
+                          ],
+                          "Resource": "arn:aws:logs:*:*:log-group:/aws/lambda/*:*:*",
+                          "Effect": "Allow"
+                      },
+                      {
+                        "Sid": "VisualEditor0",
+                        "Effect": "Allow",
+                        "Action": [
+                            "iam:PassRole",
+                            "ec2:StartInstances",
+                            "ec2:RunInstances",
+                            "ec2:AssociateIamInstanceProfile"
+                        ],
+                        "Resource": "*"
+                    }
+                  ]
+              }
+              ]
+            }
+          }
+        ]
+      }
+    }, 
+    "EFSRestoreLambda": {
+        "Type": "AWS::Lambda::Function",
+        "Properties": {
+          "Description": "Spin up an ec2 instance to restore EFS",
+          "Handler" : "index.lambda_handler",
+          "Role": { 
+            "Fn::GetAtt": [
+              "EFSBackupLambdaRole",
+              "Arn"
+            ]
+          },
+          "Runtime": "python3.7",
+          "Timeout": 30,
+          "Code": {
+            "ZipFile": {
+              "Fn::Join": [
+                  "",
+                  [
+                      "import boto3\n",                        
+                      "import time\n",
+                      "region = 'us-east-1'\n", 
+                      "user_data_script  = \"\"\"#!/bin/bash\n", 
+                      "    instanceid=$(curl http://169.254.169.254/latest/meta-data/instance-id)\n", 
+                      "    date=`date +\"%Y-%m-%d-%H.%M.%S\"`\n", 
+                      "    \n",
+                      "    # Create the EFS mount point and mount the EFS\n", 
+                      "    mkdir /mnt/environment_shared\n", 
+                      "    mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ",
+                      {
+                        "Ref": "EFSID"
+                      },
+                      "   cd /mnt/environment_shared \n",
+                      {
+                        "Ref": "AccountName"
+                      },
+                      "   FILE=`aws s3 ls $S3URL/ | tail -n 1`",
+                      "   ARRAY=($FILE)",
+                      "   FILENAME=${ARRAY[3]}",
+                      "   echo $FILENAME",
+                      "   aws s3 cp $S3URL/$FILENAME /mnt/environment_shared",
+                      "   chmod 777 $FILENAME",
+                      "   tar -xzvf $FILENAME",
+                      "   rm $FILENAME \n",
+                      {
+                        "Ref": "AccountName"
+                      },
+                      "-client-shared/efs_backup/",
+                      {
+                        "Fn::Join": [
+                          "-",
+                          [
+                            {
+                              "Ref": "AccountName"
+                            },
+                            {
+                              "Ref": "EnvironmentName"
+                            }
+                          ]
+                        ]
+                      },
+                      "/$date.tar.gz\n", 
+                      "    \n", 
+                      "    # Suicide!\n", 
+                      "    aws ec2 terminate-instances --instance-ids $instanceid --region us-east-1 \"\"\"\n", 
+                      "    \n", 
+                      "def lambda_handler(event, context):\n", 
+                      "    ec2 = boto3.client('ec2', region_name=region)\n", 
+                      "    new_instance = ec2.run_instances(\n", 
+                      "                        ImageId='ami-00068cd7555f543d5',\n", 
+                      "                        MinCount=1,\n", 
+                      "                        MaxCount=1,\n", 
+                      "                        KeyName='",
+                      {
+                        "Fn::Join": [
+                          "-",
+                          [
+                            {
+                              "Ref": "AccountName"
+                            },
+                            {
+                              "Ref": "EnvironmentName"
+                            },
+                            "keypair"
+                          ]
+                        ]
+                      },
+                      "',\n", 
+                      "                        InstanceType='t2.micro',\n", 
+                      "                        IamInstanceProfile={'Name':'",
+                      {
+                        "Ref": "EFSrestoreProfile"
+                      },
+                      "'},\n", 
+                      "                        InstanceInitiatedShutdownBehavior='terminate',\n", 
+                      "                        SubnetId='",
+                      {
+                        "Ref": "PrivateSubnet"
+                      },
+                      "',\n", 
+                      "                        UserData=user_data_script\n",
+                      "    )"
+                  ]
+              ]
+            }
+          }
+      }
+    }
+  }
+}

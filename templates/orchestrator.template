@@ -1,0 +1,580 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Deploys Application on AWS.",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label":{
+                        "default": "Application Site Domain Configuration"
+                    },
+                    "Parameters":[
+                        "ApplicationSiteDomain"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DBAutoMinorVersionUpgrade",
+                        "DBBackupRetentionPeriod",
+                        "DBInstanceClass",
+                        "DBMasterUsername",
+                        "DBMasterUserPassword",
+                        "DBPort",
+                        "DBSnapshotIdentifier",
+                        "ApplicationDbUsername",
+                        "ApplicationDbUserPassword"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Application Configuration"
+                    },
+                    "Parameters": [
+                        "PhpVersion",
+                        "ApplicationVersion",
+                        "ApplicationSiteAdminEmail",
+                        "ApplicationDbName",
+                        "Docroot"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Application Webserver Configuration"
+                    },
+                    "Parameters": [
+                        "WebServerInstanceType",
+                        "KeyPair",
+                        "WebServerMinSize",
+                        "WebServerMaxSize",
+                        "WebServerDesiredCapacity",
+                        "AutoScalingNotificationEmail",
+                        "SSLCertificateId"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "AutoScalingNotificationEmail": {
+                    "default": "Autoscaling Notification Email"
+                },
+                "DBAutoMinorVersionUpgrade": {
+                    "default": "Enable Auto Minor Version Upgrade"
+                },
+                "DBBackupRetentionPeriod": {
+                    "default": "Backup Retention Period"
+                },
+                "DBInstanceClass": {
+                    "default": "Database Instance Size"
+                },
+                "DBMasterUserPassword": {
+                    "default": "Database Admin Password"
+                },
+                "DBMasterUsername": {
+                    "default": "Database Admin Username"
+                },
+                "DBSnapshotIdentifier": {
+                    "default": "DB snapshot Name"
+                },
+                "ApplicationDbName": {
+                    "default": "Application Database Name"
+                },
+                "ApplicationDbUserPassword": {
+                    "default": "Database Application App Password"
+                },
+                "ApplicationDbUsername": {
+                    "default": "Database Application App Username"
+                },
+                "ApplicationSiteAdminEmail": {
+                    "default": "Application Site Admin Email"
+                },
+                "ApplicationSiteDomain": {
+                    "default": "Application Site Domain"
+                },
+                "ApplicationVersion": {
+                    "default": "Application Version"
+                },
+                "KeyPair": {
+                    "default": "SSH Keypair Name"
+                },
+                "PhpVersion": {
+                    "default": "PHP Version"
+                },
+                "SSLCertificateId": {
+                    "default": "SSL Certificate ARN"
+                },
+                "WebServerDesiredCapacity": {
+                    "default": "Desired number of Instances"
+                },
+                "WebServerInstanceType": {
+                    "default": "Webserver Instance Size"
+                },
+                "WebServerMaxSize": {
+                    "default": "Max Number of Instances"
+                },
+                "WebServerMinSize": {
+                    "default": "Min Number of Instances"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "AccountName": {
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+            "Description": "The name of the account.",
+            "Type": "String"
+        },
+        "EnvironmentName": {
+            "AllowedPattern": "[a-z]*",
+            "ConstraintDescription": "must contain only lowercase alpha characters.",
+            "Description": "The environment name.",
+            "Type": "String"
+        },
+        "DBSnapshotIdentifier": {
+            "ConstraintDescription": "DB Snapshot Name",
+            "Default": "",
+            "Description": "The name or Amazon Resource Name (ARN) of the DB snapshot that's used to restore the DB instance ",
+            "Type": "String"
+        },
+        "DBPort": {
+            "ConstraintDescription": "DB Port",
+            "Default": "3306",
+            "Description": "The port that the database receives requests ",
+            "Type": "String"
+        },
+        "Docroot": {
+            "ConstraintDescription": "Docroot",
+            "Default": "/",
+            "Description": "The child directory of your project that acts as the public facing web root ",
+            "Type": "String"
+        },
+        "AutoScalingNotificationEmail": {
+            "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+            "ConstraintDescription": "Must be a valid email address.",
+            "Description": "Email address to notify Auto Scaling operations",
+            "Type": "String"
+        },
+        "ClientStackName": {
+            "Description": "The name of the Client stack",
+            "Type": "String"
+        },
+        "DBAutoMinorVersionUpgrade": {
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "true",
+            "Description": "Select true/false to setup Auto Minor Version upgrade",
+            "Type": "String"
+        },
+        "DBBackupRetentionPeriod": {
+            "Default": "7",
+            "Description": "The number of days for which automatic DB snapshots are retained.",
+            "Type": "String"
+        },
+        "DBInstanceClass": {
+            "AllowedValues": [
+                "db.t2.small",
+                "db.t2.medium",
+                "db.r3.large",
+                "db.r3.xlarge",
+                "db.r3.2xlarge",
+                "db.r3.4xlarge",
+                "db.r3.8xlarge"
+            ],
+            "ConstraintDescription": "Must select a valid database instance type.",
+            "Default": "db.t2.small",
+            "Description": "Select Instance size for the Database",
+            "Type": "String"
+        },
+        "DBMasterUserPassword": {
+            "AllowedPattern": "(?=\\S)[^@/\"\\r\\n\\t\\f\\s]*",
+            "ConstraintDescription": "Min 8 alphanumeric. Cannot contain white space, @, /, \"",
+            "Description": "The database admin account password",
+            "MaxLength": "41",
+            "MinLength": "8",
+            "NoEcho": "True",
+            "Type": "String"
+        },
+        "DBMasterUsername": {
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+            "Default": "dbadmin",
+            "Description": "The database admin account username",
+            "MaxLength": "16",
+            "MinLength": "1",
+            "Type": "String"
+        },
+        "ApplicationDbUserPassword": {
+          "AllowedPattern": "(?=\\S)[^@/\"\\r\\n\\t\\f\\s]*",
+          "ConstraintDescription": "Min 8 alphanumeric. Cannot contain white space, @, /, \"",
+          "Description": "The database admin account password",
+          "MaxLength": "41",
+          "MinLength": "8",
+          "NoEcho": "True",
+          "Type": "String"
+        },
+        "ApplicationDbUsername": {
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+            "Default": "dbadmin",
+            "Description": "The database admin account username",
+            "MaxLength": "16",
+            "MinLength": "1",
+            "Type": "String"
+        },
+        "ApplicationDbName": {
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "Default": "applicationdb",
+            "Description": "Name of the Database to be created and used for the application",
+            "MaxLength": "64",
+            "MinLength": "2",
+            "Type": "String"
+        },
+        "ApplicationSiteAdminEmail": {
+            "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+            "ConstraintDescription": "Must be a valid email address.",
+            "Description": "Application Site Administrator Email",
+            "Type": "String"
+        },
+        "ApplicationSiteDomain": {
+            "Description": "Domain name of the site. e.g. example.com. Valid FQDN required when using SSL. Leave the default localhost.local for test environments.",
+            "AllowedPattern": "(?!-)[a-zA-Z0-9-.]*(?<!-)",
+            "ConstraintDescription": "Must be a valid fully-qualified domain name.",
+            "Type": "String", 
+            "Default": "localhost.local"
+        },
+        "ApplicationVersion": {
+            "AllowedValues": [
+                "7",
+                "8"
+            ],
+            "ConstraintDescription": "Allowed values 7 or 8",
+            "Default": "7",
+            "Description": "Application version to install",
+            "Type": "String"
+        },
+        "KeyPair": {
+            "ConstraintDescription": "Must be the name of an existing EC2 KeyPair.",
+            "Default": "id_rsa_aws",
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "PhpVersion": {
+            "AllowedValues": [
+                "php56",
+                "php70",
+                "php71",
+                "php72"
+            ],
+            "ConstraintDescription": "Choose a valid PHP version. Values can be php56, php70, php71 ",
+            "Default": "php71",
+            "Description": "PHP version to be installed. PHP-5.6=php56, PHP-7.0=php70, PHP-7.1=php71",
+            "Type": "String"
+        },
+        "SSLCertificateId": {
+            "Default": "",
+            "Description": "(Optional) The ARN of the SSL certificate to use for the webserver",
+            "Type": "String"
+        },
+        "WebServerDesiredCapacity": {
+            "Default": "2",
+            "Description": "Desired number of web server instances in Auto Scaling group",
+            "Type": "Number"
+        },
+        "WebServerInstanceType": {
+            "AllowedValues": [
+                "t2.small",
+                "t2.medium",
+                "t2.large",
+                "m4.large",
+                "m4.xlarge",
+                "m4.2xlarge",
+                "m4.4xlarge",
+                "m4.10xlarge",
+                "m3.medium",
+                "m3.large",
+                "m3.xlarge",
+                "m3.2xlarge",
+                "c4.large",
+                "c4.xlarge",
+                "c4.2xlarge",
+                "c4.4xlarge",
+                "c4.8xlarge",
+                "c3.large",
+                "c3.xlarge",
+                "c3.2xlarge",
+                "c3.4xlarge",
+                "c3.8xlarge",
+                "r3.large",
+                "r3.xlarge",
+                "r3.2xlarge",
+                "r3.4xlarge",
+                "r3.8xlarge",
+                "i2.xlarge",
+                "i2.2xlarge",
+                "i2.4xlarge",
+                "i2.8xlarge"
+            ],
+            "ConstraintDescription": "Choose an instance type.",
+            "Default": "t2.small",
+            "Description": "Select webserver instance size",
+            "Type": "String"
+        },
+        "WebServerMaxSize": {
+            "Default": "4",
+            "Description": "Maximum number of web server instances in Auto Scaling group",
+            "Type": "Number"
+        },
+        "WebServerMinSize": {
+            "Default": "1",
+            "Description": "Minimum number of web server instances in Auto Scaling group",
+            "Type": "Number"
+        }
+    },
+    "Rules": {
+        "EFSSupportedRegionRule": {
+            "Assertions": [
+                {
+                    "Assert": {
+                        "Fn::Contains": [
+                            [
+                                "us-east-1",
+                                "us-east-2",
+                                "us-west-2",
+                                "eu-central-1",
+                                "eu-west-1",
+                                "ap-southeast-2"
+                            ],
+                            {
+                                "Ref": "AWS::Region"
+                            }
+                        ]
+                    },
+                    "AssertDescription": "This Quick Start uses Amazon EFS which is only available in the US East (N. Virginia), US East (Ohio), US West (Oregon), EU (Frankfurt), EU (Ireland) and Asia Pacific (Sydney) regions. Please launch the stack in one of these regions"
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "SecurityGroupsStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://cg-cloudformation-templates.s3.amazonaws.com/latest_templates/securitygroups.template"
+                },
+                "Parameters": {
+                    "AccountName": { "Ref": "AccountName" },
+                    "EnvironmentName": { "Ref": "EnvironmentName" },
+                    "VPC": {
+                         "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-VPC"}
+                    },
+                    "VPCCIDR": {
+                        "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-VPCCIDR"}
+                    },
+                    "BastionSecurityGroupID": {
+                        "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-BastionSecurityGroup"}
+                    }
+                }
+            }
+        },
+        "RDSMySQLStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://cg-cloudformation-templates.s3.amazonaws.com/latest_templates/rdsmysql.template"
+                },
+                "Parameters": {
+                    "AccountName": { "Ref": "AccountName" },
+                    "EnvironmentName": { "Ref": "EnvironmentName" },
+                    "Subnets": {
+                        "Fn::Join": [
+                            ",",
+                            [
+                                {
+                                    "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-PrivateSubnet1"}
+                                },
+                                {
+                                    "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-PrivateSubnet2"}
+                                }
+                            ]
+                        ]
+                    },
+                    "RDSSecurityGroup": {
+                        "Fn::GetAtt": [
+                            "SecurityGroupsStack",
+                            "Outputs.RDSSecurityGroup"
+                        ]
+                    },
+                    "DBAutoMinorVersionUpgrade": {
+                        "Ref": "DBAutoMinorVersionUpgrade"
+                    },
+                    "DBBackupRetentionPeriod": {
+                        "Ref": "DBBackupRetentionPeriod"
+                    },
+                    "DBInstanceClass": {
+                        "Ref": "DBInstanceClass"
+                    },
+                    "DBMasterUsername": {
+                        "Ref": "DBMasterUsername"
+                    },
+                    "DBMasterUserPassword": {
+                        "Ref": "DBMasterUserPassword"
+                    },
+                    "DBSnapshotIdentifier": {
+                        "Ref": "DBSnapshotIdentifier"
+                    }
+                }
+            }
+        },
+        "WebserverStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://cg-cloudformation-templates.s3.amazonaws.com/latest_templates/webserver.template"
+                },
+                "Parameters": {
+                    "AccountName": {
+                        "Ref": "AccountName"
+                    },
+                    "EnvironmentName": {
+                        "Ref": "EnvironmentName"
+                    },
+                    "Docroot": {
+                        "Ref": "Docroot"
+                    },
+                    "AutoScalingNotificationEmail": {
+                        "Ref": "AutoScalingNotificationEmail"
+                    },
+                    "WebServerSubnets": {
+                        "Fn::Join": [
+                            ",",
+                            [
+                                {
+                                    "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-PrivateSubnet1"}
+                                },
+                                {
+                                    "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-PrivateSubnet2"}
+                                }
+                            ]
+                        ]
+                    },
+                    "EFSSecurityGroup": {
+                        "Fn::GetAtt": [
+                            "SecurityGroupsStack",
+                            "Outputs.EFSSecurityGroup"
+                        ]
+                    },
+                    "WebServerInstanceType": {
+                        "Ref": "WebServerInstanceType"
+                    },
+                    "WebServerSecurityGroup": {
+                        "Fn::GetAtt": [
+                            "SecurityGroupsStack",
+                            "Outputs.WebServerSecurityGroup"
+                        ]
+                    },
+                    "KeyPair": {
+                        "Ref": "KeyPair"
+                    },
+                    "DBEndpointAddress": {
+                        "Fn::GetAtt": [
+                            "RDSMySQLStack",
+                            "Outputs.RDSEndPointAddress"
+                        ]
+                    },
+                    "DBMasterUsername": {
+                        "Ref": "DBMasterUsername"
+                    },
+                    "DBMasterUserPassword": {
+                        "Ref": "DBMasterUserPassword"
+                    },
+                    "ApplicationDbUsername": {
+                        "Ref": "ApplicationDbUsername"
+                    },
+                    "ApplicationDbUserPassword": {
+                        "Ref": "ApplicationDbUserPassword"
+                    },
+                    "ApplicationDbName": {
+                        "Ref": "ApplicationDbName"
+                    },
+                    "PhpVersion": {
+                        "Ref": "PhpVersion"
+                    },
+                    "ApplicationVersion": {
+                        "Ref": "ApplicationVersion"
+                    },
+                    "ApplicationSiteAdminEmail": {
+                        "Ref": "ApplicationSiteAdminEmail"
+                    },
+                    "ApplicationSiteDomain": {
+                        "Ref": "ApplicationSiteDomain"
+                    },
+                    "WebServerMinSize": {
+                        "Ref": "WebServerMinSize"
+                    },
+                    "WebServerMaxSize": {
+                        "Ref": "WebServerMaxSize"
+                    },
+                    "WebServerDesiredCapacity": {
+                        "Ref": "WebServerDesiredCapacity"
+                    },
+                    "PublicSubnet1ID": {
+                        "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-PublicSubnet1"}
+                    },
+                    "PublicSubnet2ID": {
+                        "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-PublicSubnet2"}
+                    },
+                    "VPCID": {
+                        "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-VPC"}
+                    },
+                    "SSLCertificateId": {
+                        "Ref": "SSLCertificateId"
+                    }
+                }
+            }
+        },
+        "EfsBackupLambda": {
+          "Type": "AWS::CloudFormation::Stack",
+          "Properties": {
+              "TemplateURL": {
+                  "Fn::Sub": "https://cg-cloudformation-templates.s3.amazonaws.com/latest_templates/efsbackuplambda.template"
+              },
+              "Parameters": {
+                  "AccountName": { "Ref": "AccountName" },
+                  "EnvironmentName": { "Ref": "EnvironmentName" },
+                  "PrivateSubnet": {
+                    "Fn::ImportValue" : {"Fn::Sub" : "${ClientStackName}-PrivateSubnet1"}
+                  },
+                  "EFSID": {
+                    "Fn::GetAtt": [
+                      "WebserverStack",
+                      "Outputs.ApplicationEFS"
+                    ]
+                  }
+              }
+          }
+        }      
+    },
+    "Outputs": {
+        "StackVersion": {
+            "Description": "The version of the stack",
+            "Value": "latest_templates"
+        },
+        "ELBURL": {
+            "Description": "The URL of the ELB that you should use to create a CNAME/ALIAS DNS recrod to point to your Domain e.g. mysite.com",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebserverStack",
+                    "Outputs.ELBURL"
+                ]
+            }
+        },
+        "ApplicationSiteUrl":{
+            "Description": "Application Site URL",
+            "Value": {"Ref": "ApplicationSiteDomain"}
+        }
+    }
+}
