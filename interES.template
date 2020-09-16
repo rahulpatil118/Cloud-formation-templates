@@ -1,0 +1,251 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t2.large
+Resources:
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType:
+        Ref: InstanceType
+      SecurityGroups:
+      - Ref: InstanceSecurityGroup
+      KeyName:
+        Ref: KeyName
+      ImageId: ami-0b8cf0f359b1335e1
+      UserData:
+        'Fn::Base64': 
+          !Sub |
+            #!/bin/bash
+            sudo su
+            apt-get update -y
+            apt install apt-transport-https
+            apt install openjdk-8-jdk -y
+            wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch |   apt-key add -
+            sh -c 'echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" > /etc/apt/sources.list.d/elastic-7.x.list'
+            apt update -y
+            apt install elasticsearch -y
+            cd /etc
+            chown root:root elasticsearch/
+            chmod 777 elasticsearch/*
+            echo " 
+            cluster.name: es-cluster
+            node.name: master
+            network.host: 0.0.0.0
+            http.port: 9200
+            discovery.zen.ping.unicast.hosts: [es-node-1, es-node-2]" > /etc/elasticsearch/elasticsearch.yml 
+          
+            echo " 
+            127.0.0.1 localhost
+            172.31.0.77 es-node-1
+            172.31.0.45 es-node-2
+            172.31.0.48 es-node-3" > /etc/hosts
+
+            echo "
+            # heap memory
+            -Xms2g
+            -Xmx2g " > /etc/elasticsearch/jvm.options
+            
+            
+            echo " 
+            ES_STARTUP_SLEEP_TIME=5
+            MAX_OPEN_FILES=65536
+            MAX_LOCKED_MEMORY=unlimited " > /etc/default/elasticsearch 
+            
+            echo "
+            elasticsearch soft memlock unlimited
+            elasticsearch hard memlock unlimited " > /etc/security/limits.conf
+            
+            sysctl -w vm.max_map_count=262144
+            sysctl -p /etc/sysctl.conf
+            chown -R elasticsearch:elasticsearch /usr/share/elasticsearch
+            /bin/systemctl enable elasticsearch.service
+            systemctl start elasticsearch.service
+            systemctl enable elasticsearch.service
+            curl -X GET "http://localhost:9200/?pretty"
+            
+            
+      Tags:
+        -
+          Key: Name
+          Value: master
+    
+  EC2Instancenode:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType:
+        Ref: InstanceType
+      SecurityGroups:
+      - Ref: InstanceSecurityGroup
+      KeyName:
+        Ref: KeyName
+      ImageId: ami-0b8cf0f359b1335e1
+      UserData:
+        'Fn::Base64': 
+          !Sub |
+            #!/bin/bash
+            sudo su
+            apt-get update -y
+            apt install apt-transport-https
+            apt install openjdk-8-jdk -y
+            wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch |   apt-key add -
+            sh -c 'echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" > /etc/apt/sources.list.d/elastic-7.x.list'
+            apt update -y
+            apt install elasticsearch -y
+            cd /etc
+            chown root:root elasticsearch/
+            chmod 777 elasticsearch/*
+            echo " 
+            cluster.name: es-cluster
+            node.name: Node-1
+            network.host: 0.0.0.0
+            http.port: 9200
+            discovery.zen.ping.unicast.hosts: [es-node-1, es-node-2]" > /etc/elasticsearch/elasticsearch.yml 
+          
+            echo " 127.0.0.1 localhost
+            172.31.0.77 es-node-1
+            172.31.0.45 es-node-2
+            172.31.0.48 es-node-3" > /etc/hosts
+
+            echo"# heap memory
+            -Xms2g
+            -Xmx2g " > etc/elasticsearch/jvm.options
+            
+            
+            echo "ES_STARTUP_SLEEP_TIME=5
+            MAX_OPEN_FILES=65536
+            MAX_LOCKED_MEMORY=unlimited " > /etc/default/elasticsearch 
+            
+            echo "
+            elasticsearch soft memlock unlimited
+            elasticsearch hard memlock unlimited " > /etc/security/limits.conf
+            
+            sysctl -w vm.max_map_count=262144
+            sysctl -p /etc/sysctl.conf
+            chown -R elasticsearch:elasticsearch /usr/share/elasticsearch
+            /bin/systemctl enable elasticsearch.service
+            systemctl start elasticsearch.service
+            systemctl enable elasticsearch.service
+            curl -X GET "http://localhost:9200/?pretty"
+
+      Tags:
+        -
+          Key: Name
+          Value: Node-1
+  EC2Instancenod:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType:
+        Ref: InstanceType
+      SecurityGroups:
+      - Ref: InstanceSecurityGroup
+      KeyName:
+        Ref: KeyName
+      ImageId: ami-0b8cf0f359b1335e1
+      UserData:
+        'Fn::Base64': 
+          !Sub |
+            #!/bin/bash
+            sudo su
+            apt-get update -y
+            apt install apt-transport-https
+            apt install openjdk-8-jdk -y
+            wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch |   apt-key add -
+            sh -c 'echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" > /etc/apt/sources.list.d/elastic-7.x.list'
+            apt update -y
+            apt install elasticsearch -y
+            cd /etc
+            chown root:root elasticsearch/
+            chmod 777 elasticsearch/*
+            echo " cluster.name: es-cluster
+            node.name: Node-2
+            network.host: 0.0.0.0
+            http.port: 9200
+            discovery.zen.ping.unicast.hosts: [es-node-1, es-node-2]" > /etc/elasticsearch/elasticsearch.yml 
+          
+            echo " 127.0.0.1 localhost
+            172.31.0.77 es-node-1
+            172.31.0.45 es-node-2
+            172.31.0.48 es-node-3" > /etc/hosts
+
+            echo"# heap memory
+            -Xms2g
+            -Xmx2g " > etc/elasticsearch/jvm.options
+            
+            
+            echo "ES_STARTUP_SLEEP_TIME=5
+            MAX_OPEN_FILES=65536
+            MAX_LOCKED_MEMORY=unlimited " > /etc/default/elasticsearch 
+            
+            echo "
+            elasticsearch soft memlock unlimited
+            elasticsearch hard memlock unlimited " > /etc/security/limits.conf
+            
+            sysctl -w vm.max_map_count=262144
+            sysctl -p /etc/sysctl.conf
+            chown -R elasticsearch:elasticsearch /usr/share/elasticsearch
+            /bin/systemctl enable elasticsearch.service
+            systemctl start elasticsearch.service
+            systemctl enable elasticsearch.service
+            curl -X GET "http://localhost:9200/?pretty"
+      Tags:
+        -
+          Key: Name
+          Value: Node-2
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '9200'
+        ToPort: '9200'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 9300
+        ToPort: '9300'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '5601'
+        ToPort: '5601'
+        CidrIp: 0.0.0.0/0
+Outputs:
+  InstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value:
+      Ref: EC2Instance
+  AZ:
+    Description: Availability Zone of the newly created EC2 instance
+    Value:
+      Fn::GetAtt:
+      - EC2Instance
+      - AvailabilityZone
+  PublicDNS:
+    Description: Public DNSName of the newly created EC2 instance
+    Value:
+      Fn::GetAtt:
+      - EC2Instance
+      - PublicDnsName
+  PublicIP:
+    Description: Public IP address of the newly created EC2 instance
+    Value:
+      Fn::GetAtt:
+      - EC2Instance
+      - PublicIp

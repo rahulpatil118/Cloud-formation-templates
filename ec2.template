@@ -1,0 +1,85 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t2.medium
+    AllowedValues:
+    - t2.large
+    - t2.xlarge
+    - t2.medium
+  VpcId: 
+    Description: Select the VPC to deploy Application . 
+    Type: AWS::EC2::VPC::Id
+Resources:
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0e0e935d0209fced7
+      InstanceType:
+        Ref: InstanceType
+      Tags:
+        -
+          Key: Name
+          Value: Windows-machine-Qlikview
+      SecurityGroups: 
+      - Ref: MySecurityGroup      
+      KeyName: !Ref KeyName
+      BlockDeviceMappings: 
+      - DeviceName: "/dev/sdm"
+        Ebs: 
+          VolumeType: "io1"
+          Iops: "200"
+          DeleteOnTermination: "false"
+          VolumeSize: "100"
+        
+      UserData:
+        'Fn::Base64':
+            <powershell>
+            $url = "https://raw.githubusercontent.com/jborean93/ansible-windows/master/scripts/Upgrade-PowerShell.ps1"
+            $file = "$env:temp\Upgrade-PowerShell.ps1"
+            $username = "Administrator"
+            $password = "Password"
+            (New-Object -TypeName System.Net.WebClient).DownloadFile($url, $file)
+            Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Force
+            $url = "https://raw.githubusercontent.com/jborean93/ansible-windows/master/scripts/Install-WMF3Hotfix.ps1"
+            $file = "$env:temp\Install-WMF3Hotfix.ps1"
+            (New-Object -TypeName System.Net.WebClient).DownloadFile($url, $file)
+            powershell.exe -ExecutionPolicy ByPass -File $file -Verbose  
+            $url = "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1"
+            $file = "$env:temp\ConfigureRemotingForAnsible.ps1"
+            (New-Object -TypeName System.Net.WebClient).DownloadFile($url, $file)
+            powershell.exe -ExecutionPolicy ByPass -File $file
+            winrm enumerate winrm/config/Listener
+            winrm set winrm/config/service/auth @{Basic="true"} 
+            winrm set winrm/config/service @{AllowUnencrypted="true"} 
+            $thumbprint = "E6CDAA82EEAF2ECE8546E05DB7F3E01AA47D76CE"
+            Get-ChildItem -Path cert:\LocalMachine\My -Recurse | Where-Object { $_.Thumbprint -eq $thumbprint } | Select-Object *            
+            msiexec /i QlikViewServerx64.msi Addlocal="all" IS_NET_API_LOGON_USERNAME="Domain\username" IS_NET_API_LOGON_PASSWORD="password" /qn+
+            Start-Process msiexec /i QlikViewServerx64.msi Addlocal="all" IS_NET_API_LOGON_USERNAME="Domain\username" IS_NET_API_LOGON_PASSWORD="password" /qn+
+            </powershell>
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Window-machine
+      GroupDescription: Enable RDP traffic via port 3389
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5986
+          ToPort: 5986
+          CidrIp: 0.0.0.0/0
+Outputs:
+  ServerDns:
+    Value: !GetAtt
+      - Ec2Instance
+      - PublicDnsName
